@@ -1,0 +1,1195 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "This stack deploys the VPC infrastructure, DocumentDB, Lambda, API gateway and EC2 for demonstrating Document DB read and write with sensitive data encryption.",
+    "Parameters": {
+        "KeyAliasName": {
+            "Default": "docdbdemokey",
+            "Description": "Key Alias name",
+            "Type": "String",
+            "AllowedPattern": "[A-Za-z0-9_/-]*"
+        },
+        "DBClusterName": {
+            "Description": "Cluster name",
+            "Type": "String",
+            "MinLength": "1",
+            "MaxLength": "64",
+            "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*(-[a-zA-Z0-9]+)*",
+            "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters."
+        },
+        "DBInstanceName": {
+            "Description": "Instance name",
+            "Type": "String",
+            "MinLength": "1",
+            "MaxLength": "64",
+            "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*(-[a-zA-Z0-9]+)*",
+            "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters."
+        },
+        "DocDBMasterUser": {
+            "NoEcho": "false",
+            "Description": "The database admin account username",
+            "Type": "String",
+            "MinLength": "1",
+            "MaxLength": "16",
+            "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+            "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters."
+        },
+        "DocDBMasterPassword": {
+            "NoEcho": "true",
+            "Description": "Master Password must be at least eight characters long",
+            "Type": "String",
+            "MinLength": "8",
+            "MaxLength": "41",
+            "ConstraintDescription": "must contain only alphanumeric characters."
+        },
+        "DBInstanceClass": {
+            "Description": "Instance class. Please refer to: https://docs.aws.amazon.com/documentdb/latest/developerguide/db-instance-classes.html#db-instance-classes-by-region",
+            "Default": "db.t3.medium",
+            "Type": "String",
+            "AllowedValues": [
+                "db.t3.medium",
+                "db.r5.large",
+                "db.r5.xlarge",
+                "db.r5.2xlarge",
+                "db.r5.4xlarge",
+                "db.r5.8xlarge",
+                "db.r5.12xlarge",
+                "db.r5.16xlarge",
+                "db.r5.24xlarge"
+            ],
+            "ConstraintDescription": "Instance type must be of the ones supported for the region. Please refer to: https://docs.aws.amazon.com/documentdb/latest/developerguide/db-instance-classes.html#db-instance-classes-by-region"
+        },
+        "LambdaCodeS3BucketNameLocation": {
+            "Description": "S3 bucket name where your lambda zip code is uploaded",
+            "Type": "String",
+            "AllowedPattern": "[a-z0-9]+",
+            "ConstraintDescription": "Lowercase letters and numbers only!",
+            "MaxLength": "63"
+        },
+        "InsertLambdaZipFileName": {
+            "Default": "DocDBDemoInsert.zip",
+            "Description": "Insert lambda zip file name",
+            "Type": "String",
+            "MinLength": "1",
+            "MaxLength": "64"
+        },
+        "RetrieveLambdaZipFileName": {
+            "Default": "DocDBDemoRetrive.zip",
+            "Description": "Retrieve lambda zip file name",
+            "Type": "String",
+            "MinLength": "1",
+            "MaxLength": "64"
+        },
+        "LambdaLayerZipFileName": {
+            "Default": "lambda-layer.zip",
+            "Description": "Lambda layer zip file name",
+            "Type": "String",
+            "MinLength": "1",
+            "MaxLength": "64"
+        },
+        "ec2KeyPairName": {
+            "Type": "String",
+            "Default": "Ec2-keypair2122"
+        },
+        "ec2AMI": {
+            "Type": "String",
+            "Default": "ami-0ab4d1e9cf9a1215a"
+        },
+        "ec2InstanceType": {
+            "Type": "String",
+            "Default": "t3.medium"
+        }
+    },
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Enter Amazon DocumentDB Database Configuration"
+                    },
+                    "Parameters": [
+                        "DBClusterName",
+                        "DBInstanceName",
+                        "DocDBMasterUser",
+                        "DocDBMasterPassword",
+                        "DBInstanceClass"
+                    ]
+                }
+            ]
+        }
+    },
+    "Mappings": {
+        "SubnetConfig": {
+            "VPC": {
+                "CIDR": "10.0.0.0/16"
+            },
+            "PublicOne": {
+                "CIDR": "10.0.0.0/24"
+            },
+            "PublicTwo": {
+                "CIDR": "10.0.1.0/24"
+            },
+            "PrivateOne": {
+                "CIDR": "10.0.2.0/24"
+            },
+            "PrivateTwo": {
+                "CIDR": "10.0.3.0/24"
+            }
+        }
+    },
+    "Resources": {
+        "kmskey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "KeyPolicy": {
+                    "Statement": [
+                        {
+                            "Sid": "DocDbDemoCustomerKeyPolicy",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": [
+                                "kms:*"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            }
+        },
+        "Alias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/${KeyAliasName}"
+                },
+                "TargetKeyId": {
+                    "Ref": "kmskey"
+                }
+            }
+        },
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "EnableDnsSupport": true,
+                "EnableDnsHostnames": true,
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "VPC",
+                        "CIDR"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "DocDB-VPC-${AWS::StackName}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicSubnetOne": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": {
+                                "Ref": "AWS::Region"
+                            }
+                        }
+                    ]
+                },
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "PublicOne",
+                        "CIDR"
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "DocDBVPCPublicOne-${AWS::StackName}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicSubnetTwo": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": {
+                                "Ref": "AWS::Region"
+                            }
+                        }
+                    ]
+                },
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "PublicTwo",
+                        "CIDR"
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "DocDBVPCPublicTwo-${AWS::StackName}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnetOne": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": {
+                                "Ref": "AWS::Region"
+                            }
+                        }
+                    ]
+                },
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "PrivateOne",
+                        "CIDR"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "DocDBVPCPrivateOne-${AWS::StackName}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnetTwo": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": {
+                                "Ref": "AWS::Region"
+                            }
+                        }
+                    ]
+                },
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "PrivateTwo",
+                        "CIDR"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "DocDBVPCPrivateTwo-${AWS::StackName}"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway"
+        },
+        "GatewayAttachement": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "PublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "GatewayAttachement",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnetOneRouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnetOne"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PublicSubnetTwoRouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnetTwo"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "NatGatewayOneAttachment": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "GatewayAttachement",
+            "Properties": {
+                "Domain": "vpc"
+            }
+        },
+        "NatGatewayTwoAttachment": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "GatewayAttachement",
+            "Properties": {
+                "Domain": "vpc"
+            }
+        },
+        "NatGatewayOne": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatGatewayOneAttachment",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnetOne"
+                }
+            }
+        },
+        "NatGatewayTwo": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatGatewayTwoAttachment",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnetTwo"
+                }
+            }
+        },
+        "PrivateRouteTableOne": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "PrivateRouteOne": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableOne"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGatewayOne"
+                }
+            }
+        },
+        "PrivateRouteTableOneAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableOne"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnetOne"
+                }
+            }
+        },
+        "PrivateRouteTableTwo": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "PrivateRouteTwo": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableTwo"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGatewayTwo"
+                }
+            }
+        },
+        "PrivateRouteTableTwoAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableTwo"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnetTwo"
+                }
+            }
+        },
+        "EC2SecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "Ec2SecurityGroup-${AWS::StackName}"
+                },
+                "GroupDescription": "Allow EC2 access from anywhere",
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "LambdaSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "LambdaSecurityGroup-${AWS::StackName}"
+                },
+                "GroupDescription": "Lambda Security Group",
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "lambda-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Statement": [
+                        {
+                            "Action": [
+                                "sts:AssumeRole"
+                            ],
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "lambda.amazonaws.com"
+                                ]
+                            }
+                        }
+                    ],
+                    "Version": "2012-10-17"
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+                    "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "LambdaAccessPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "AWSLambdaVPCAccessExecutionRole",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents",
+                                        "ec2:CreateNetworkInterface",
+                                        "ec2:DescribeNetworkInterfaces",
+                                        "ec2:DeleteNetworkInterface",
+                                        "kms:Decrypt",
+                                        "kms:Encrypt"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Path": "/"
+            }
+        },
+        "LambdaLayer": {
+            "Type": "AWS::Lambda::LayerVersion",
+            "Properties": {
+                "CompatibleRuntimes": [
+                    "python3.7",
+                    "python3.8"
+                ],
+                "Content": {
+                    "S3Bucket": {
+                        "Ref": "LambdaCodeS3BucketNameLocation"
+                    },
+                    "S3Key": {
+                        "Ref": "LambdaLayerZipFileName"
+                    }
+                },
+                "Description": "Lambda Pymongo dependency",
+                "LayerName": "PymongoLambdaLayer"
+            }
+        },
+        "LambdaInsertFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Code": {
+                    "S3Bucket": {
+                        "Ref": "LambdaCodeS3BucketNameLocation"
+                    },
+                    "S3Key": {
+                        "Ref": "InsertLambdaZipFileName"
+                    }
+                },
+                "Description": "Lambda to insert and read from docDB",
+                "FunctionName": "DemoDocDbInsertLambda",
+                "Handler": "DocDBDemoInsert.lambda_handler",
+                "Layers": [
+                    {
+                        "Ref": "LambdaLayer"
+                    }
+                ],
+                "MemorySize": 128,
+                "PackageType": "Zip",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Runtime": "python3.8",
+                "Environment": {
+                    "Variables": {
+                        "docdbUser": {
+                            "Ref": "DocDBMasterUser"
+                        },
+                        "docdbPass": {
+                            "Ref": "DocDBMasterPassword"
+                        },
+                        "docdbEndpoint": {
+                            "Fn::Join": [
+                                ":",
+                                [{
+                                    "Fn::GetAtt": [
+                                        "DBCluster",
+                                        "Endpoint"
+                                    ]
+                                },
+                                {
+                                    "Fn::GetAtt": [
+                                        "DBInstance",
+                                        "Port"
+                                    ]
+                                }]
+                            ]
+                        },
+                        "kms_key_alias": {
+                            "Ref": "KeyAliasName"
+                        }
+                    }
+                },
+                "VpcConfig": {
+                    "SecurityGroupIds": [
+                        {
+                            "Fn::GetAtt": [
+                                "LambdaSecurityGroup",
+                                "GroupId"
+                            ]
+                        }
+                    ],
+                    "SubnetIds": [
+                        {
+                            "Ref": "PrivateSubnetOne"
+                        },
+                        {
+                            "Ref": "PrivateSubnetTwo"
+                        }
+                    ]
+                }
+            }
+        },
+        "LambdaRetrieveFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Code": {
+                    "S3Bucket": {
+                        "Ref": "LambdaCodeS3BucketNameLocation"
+                    },
+                    "S3Key": {
+                        "Ref": "RetrieveLambdaZipFileName"
+                    }
+                },
+                "Description": "Lambda to insert and read from docDB",
+                "FunctionName": "DemoDocDbRetrieveLambda",
+                "Handler": "DocDBDemoRetrive.lambda_handler",
+                "Layers": [
+                    {
+                        "Ref": "LambdaLayer"
+                    }
+                ],
+                "MemorySize": 128,
+                "PackageType": "Zip",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Runtime": "python3.8",
+                "Environment": {
+                    "Variables": {
+                        "docdbUser": {
+                            "Ref": "DocDBMasterUser"
+                        },
+                        "docdbPass": {
+                            "Ref": "DocDBMasterPassword"
+                        },
+                        "docdbEndpoint": {
+                            "Fn::Join": [
+                                ":",
+                                [{
+                                    "Fn::GetAtt": [
+                                        "DBCluster",
+                                        "Endpoint"
+                                    ]
+                                },
+                                {
+                                    "Fn::GetAtt": [
+                                        "DBInstance",
+                                        "Port"
+                                    ]
+                                }]
+                            ]
+                        },
+                        "kms_key_alias": {
+                            "Ref": "KeyAliasName"
+                        }
+                    }
+                },
+                "VpcConfig": {
+                    "SecurityGroupIds": [
+                        {
+                            "Fn::GetAtt": [
+                                "LambdaSecurityGroup",
+                                "GroupId"
+                            ]
+                        }
+                    ],
+                    "SubnetIds": [
+                        {
+                            "Ref": "PrivateSubnetOne"
+                        },
+                        {
+                            "Ref": "PrivateSubnetTwo"
+                        }
+                    ]
+                }
+            }
+        },
+        "DocumentDBSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "DocDbSecurityGroup-${AWS::StackName}"
+                },
+                "GroupDescription": "Allow access from VPC",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "27017",
+                        "ToPort": "27017",
+                        "CidrIp": "10.0.0.0/16"
+                    }
+                ]
+            }
+        },
+        "VPCEndpointSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "SecurityGroup1-${AWS::StackName}"
+                },
+                "GroupDescription": "Allow HTTPS access from VPC to VPC Endpoint",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "443",
+                        "ToPort": "443",
+                        "CidrIp": "10.0.0.0/16"
+                    }
+                ]
+            }
+        },
+        "DocDBSubnetGroup": {
+            "Type": "AWS::DocDB::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupDescription": "Subnet group for DocumentDB",
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnetOne"
+                    },
+                    {
+                        "Ref": "PrivateSubnetTwo"
+                    }
+                ]
+            }
+        },
+        "DBCluster": {
+            "Type": "AWS::DocDB::DBCluster",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "DBClusterIdentifier": {
+                    "Ref": "DBClusterName"
+                },
+                "DBSubnetGroupName": {
+                    "Ref": "DocDBSubnetGroup"
+                },
+                "VpcSecurityGroupIds": [
+                    {
+                        "Fn::GetAtt": [
+                            "DocumentDBSecurityGroup",
+                            "GroupId"
+                        ]
+                    }
+                ],
+                "MasterUsername": {
+                    "Ref": "DocDBMasterUser"
+                },
+                "MasterUserPassword": {
+                    "Ref": "DocDBMasterPassword"
+                }
+            }
+        },
+        "DBInstance": {
+            "Type": "AWS::DocDB::DBInstance",
+            "Properties": {
+                "DBClusterIdentifier": {
+                    "Ref": "DBCluster"
+                },
+                "DBInstanceIdentifier": {
+                    "Ref": "DBInstanceName"
+                },
+                "DBInstanceClass": {
+                    "Ref": "DBInstanceClass"
+                }
+            },
+            "DependsOn": "DBCluster"
+        },
+        "EC2": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "ImageId": {
+                    "Ref": "ec2AMI"
+                },
+                "InstanceType": {
+                    "Ref": "ec2InstanceType"
+                },
+                "KeyName": {
+                    "Ref": "ec2KeyPairName"
+                },
+                "SecurityGroupIds": [
+                    {
+                        "Fn::GetAtt": [
+                            "EC2SecurityGroup",
+                            "GroupId"
+                        ]
+                    }
+                ],
+                "SubnetId": {
+                    "Ref": "PublicSubnetOne"
+                },
+                "Tags" : [
+                    {
+                       "Key" : "Name",
+                       "Value" : "DocDBConnectDemo"
+                    }
+                 ]
+            }
+        },
+        "PersonApi": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": "Person API",
+                "Description": "API used for Person Info requests",
+                "FailOnWarnings": true
+            }
+        },
+        "LambdaGetPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "Action": "lambda:invokeFunction",
+                "FunctionName": {
+                    "Fn::GetAtt": [
+                        "LambdaRetrieveFunction",
+                        "Arn"
+                    ]
+                },
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "arn:aws:execute-api:",
+                            {
+                                "Ref": "AWS::Region"
+                            },
+                            ":",
+                            {
+                                "Ref": "AWS::AccountId"
+                            },
+                            ":",
+                            {
+                                "Ref": "PersonApi"
+                            },
+                            "/*"
+                        ]
+                    ]
+                }
+            }
+        },
+        "LambdaPostPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "Action": "lambda:invokeFunction",
+                "FunctionName": {
+                    "Fn::GetAtt": [
+                        "LambdaInsertFunction",
+                        "Arn"
+                    ]
+                },
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "arn:aws:execute-api:",
+                            {
+                                "Ref": "AWS::Region"
+                            },
+                            ":",
+                            {
+                                "Ref": "AWS::AccountId"
+                            },
+                            ":",
+                            {
+                                "Ref": "PersonApi"
+                            },
+                            "/*"
+                        ]
+                    ]
+                }
+            }
+        },
+        "PersonApiStage": {
+            "Type": "AWS::ApiGateway::Stage",
+            "Properties": {
+                "DeploymentId": {
+                    "Ref": "ApiDeployment"
+                },
+                "MethodSettings": [
+                    {
+                        "DataTraceEnabled": true,
+                        "HttpMethod": "*",
+                        "LoggingLevel": "INFO",
+                        "ResourcePath": "/*"
+                    }
+                ],
+                "RestApiId": {
+                    "Ref": "PersonApi"
+                },
+                "StageName": "LATEST"
+            }
+        },
+        "ApiDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": [
+                "PersonSearchRequest",
+                "PersonInsertRequest"
+            ],
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "PersonApi"
+                },
+                "StageName": "DummyStage"
+            }
+        },
+        "PersonResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "PersonApi"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "PersonApi",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "Person"
+            }
+        },
+        "PersonSearchResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "PersonApi"
+                },
+                "ParentId": {
+                    "Ref": "PersonResource"
+                },
+                "PathPart": "Search"
+            }
+        },
+        "PersonSearchRequest": {
+            "DependsOn": "LambdaGetPermission",
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "AuthorizationType": "NONE",
+                "HttpMethod": "POST",
+                "Integration": {
+                    "Type": "AWS",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Join": [
+                            "",
+                            [
+                                "arn:aws:apigateway:",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                ":lambda:path/2015-03-31/functions/",
+                                {
+                                    "Fn::GetAtt": [
+                                        "LambdaRetrieveFunction",
+                                        "Arn"
+                                    ]
+                                },
+                                "/invocations"
+                            ]
+                        ]
+                    },
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": 200
+                        }
+                    ]
+                },
+                "ResourceId": {
+                    "Ref": "PersonSearchResource"
+                },
+                "RestApiId": {
+                    "Ref": "PersonApi"
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200
+                    }
+                ]
+            }
+        },
+        "PersonInsertRequest": {
+            "DependsOn": "LambdaPostPermission",
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "AuthorizationType": "NONE",
+                "HttpMethod": "POST",
+                "Integration": {
+                    "Type": "AWS",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Join": [
+                            "",
+                            [
+                                "arn:aws:apigateway:",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                ":lambda:path/2015-03-31/functions/",
+                                {
+                                    "Fn::GetAtt": [
+                                        "LambdaInsertFunction",
+                                        "Arn"
+                                    ]
+                                },
+                                "/invocations"
+                            ]
+                        ]
+                    },
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": 200
+                        }
+                    ]
+                },
+                "ResourceId": {
+                    "Ref": "PersonResource"
+                },
+                "RestApiId": {
+                    "Ref": "PersonApi"
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "VPCid": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "PrivateSubnetOne",
+                    "VpcId"
+                ]
+            }
+        },
+        "SecurityGroupId": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "DocumentDBSecurityGroup",
+                    "GroupId"
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Value": {
+                "Ref": "PrivateSubnetOne"
+            }
+        },
+        "PrivateSubnet2": {
+            "Value": {
+                "Ref": "PrivateSubnetTwo"
+            }
+        },
+        "ClusterId": {
+            "Value": {
+                "Ref": "DBCluster"
+            }
+        },
+        "ClusterEndpoint": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "DBCluster",
+                    "Endpoint"
+                ]
+            }
+        },
+        "docdbEndpoint": {
+            "Value": {
+                "Fn::Join": [
+                    ":",
+                    [{
+                        "Fn::GetAtt": [
+                            "DBCluster",
+                            "Endpoint"
+                        ]
+                    },
+                    {
+                        "Fn::GetAtt": [
+                            "DBInstance",
+                            "Port"
+                        ]
+                    }]
+                ]
+            }
+        },
+        "ClusterReadEndpoint": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "DBCluster",
+                    "ReadEndpoint"
+                ]
+            }
+        },
+        "ClusterPort": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "DBCluster",
+                    "Port"
+                ]
+            }
+        },
+        "InstanceId": {
+            "Value": {
+                "Ref": "DBInstance"
+            }
+        },
+        "InstancePort": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "DBInstance",
+                    "Port"
+                ]
+            }
+        },
+        "InstanceEndpoint": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "DBInstance",
+                    "Endpoint"
+                ]
+            }
+        }
+    }
+}
