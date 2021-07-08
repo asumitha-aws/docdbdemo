@@ -941,39 +941,6 @@
                 }
             }
         },
-        "PersonApiStage": {
-            "Type": "AWS::ApiGateway::Stage",
-            "Properties": {
-                "DeploymentId": {
-                    "Ref": "ApiDeployment"
-                },
-                "MethodSettings": [
-                    {
-                        "DataTraceEnabled": true,
-                        "HttpMethod": "*",
-                        "LoggingLevel": "INFO",
-                        "ResourcePath": "/*"
-                    }
-                ],
-                "RestApiId": {
-                    "Ref": "PersonApi"
-                },
-                "StageName": "LATEST"
-            }
-        },
-        "ApiDeployment": {
-            "Type": "AWS::ApiGateway::Deployment",
-            "DependsOn": [
-                "PersonSearchRequest",
-                "PersonInsertRequest"
-            ],
-            "Properties": {
-                "RestApiId": {
-                    "Ref": "PersonApi"
-                },
-                "StageName": "DummyStage"
-            }
-        },
         "PersonResource": {
             "Type": "AWS::ApiGateway::Resource",
             "Properties": {
