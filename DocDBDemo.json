@@ -61,7 +61,7 @@
         "LambdaCodeS3BucketNameLocation": {
             "Description": "S3 bucket name where your lambda zip code is uploaded",
             "Type": "String",
-            "AllowedPattern": "[a-z0-9]+",
+            "AllowedPattern": "[a-z0-9-_]+",
             "ConstraintDescription": "Lowercase letters and numbers only!",
             "MaxLength": "63"
         },
@@ -88,7 +88,8 @@
         },
         "ec2KeyPairName": {
             "Type": "String",
-            "Default": "Ec2-keypair2122"
+            "AllowedPattern" : ".+",
+            "Description": "Your EC2 key pair name without .pem extension"
         },
         "ec2AMI": {
             "Type": "String",
