@@ -88,7 +88,7 @@
         },
         "ec2KeyPairName": {
             "Type": "String",
-            "AllowedPattern" : ".+",
+            "AllowedPattern": ".+",
             "Description": "Your EC2 key pair name without .pem extension"
         },
         "ec2AMI": {
@@ -98,6 +98,12 @@
         "ec2InstanceType": {
             "Type": "String",
             "Default": "t3.medium"
+        },
+        "yourIPAddress": {
+            "Type": "String",
+            "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x",
+            "Description": "Replace X.X.X.X with your ip address",
+            "Default": "X.X.X.X/32"
         }
     },
     "Metadata": {
@@ -497,7 +503,17 @@
                 "GroupDescription": "Allow EC2 access from anywhere",
                 "VpcId": {
                     "Ref": "VPC"
-                }
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "22",
+                        "ToPort": "22",
+                        "CidrIp": {
+                            "Ref": "yourIPAddress"
+                        }
+                    }
+                ]
             }
         },
         "LambdaSecurityGroup": {
@@ -624,18 +640,20 @@
                         "docdbEndpoint": {
                             "Fn::Join": [
                                 ":",
-                                [{
-                                    "Fn::GetAtt": [
-                                        "DBCluster",
-                                        "Endpoint"
-                                    ]
-                                },
-                                {
-                                    "Fn::GetAtt": [
-                                        "DBInstance",
-                                        "Port"
-                                    ]
-                                }]
+                                [
+                                    {
+                                        "Fn::GetAtt": [
+                                            "DBCluster",
+                                            "Endpoint"
+                                        ]
+                                    },
+                                    {
+                                        "Fn::GetAtt": [
+                                            "DBInstance",
+                                            "Port"
+                                        ]
+                                    }
+                                ]
                             ]
                         },
                         "kms_key_alias": {
@@ -702,18 +720,20 @@
                         "docdbEndpoint": {
                             "Fn::Join": [
                                 ":",
-                                [{
-                                    "Fn::GetAtt": [
-                                        "DBCluster",
-                                        "Endpoint"
-                                    ]
-                                },
-                                {
-                                    "Fn::GetAtt": [
-                                        "DBInstance",
-                                        "Port"
-                                    ]
-                                }]
+                                [
+                                    {
+                                        "Fn::GetAtt": [
+                                            "DBCluster",
+                                            "Endpoint"
+                                        ]
+                                    },
+                                    {
+                                        "Fn::GetAtt": [
+                                            "DBInstance",
+                                            "Port"
+                                        ]
+                                    }
+                                ]
                             ]
                         },
                         "kms_key_alias": {
@@ -859,12 +879,26 @@
                 "SubnetId": {
                     "Ref": "PublicSubnetOne"
                 },
-                "Tags" : [
+                "Tags": [
                     {
-                       "Key" : "Name",
-                       "Value" : "DocDBConnectDemo"
+                        "Key": "Name",
+                        "Value": "DocDBConnectDemo"
                     }
-                 ]
+                ],
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            " ",
+                            [
+                                "#!/bin/bash -xe\n",
+                                "cd /home/ec2-user\n",
+                                "echo -e '[mongodb-org-3.6] \nname=MongoDB Repository\nbaseurl=https://repo.mongodb.org/yum/amazon/2013.03/mongodb-org/3.6/x86_64/\ngpgcheck=1 \nenabled=1 \ngpgkey=https://www.mongodb.org/static/pgp/server-3.6.asc' | sudo tee /etc/yum.repos.d/mongodb-org-3.6.repo\n",
+                                "sudo yum install -y mongodb-org-shell\n",
+                                "wget https://s3.amazonaws.com/rds-downloads/rds-combined-ca-bundle.pem"
+                            ]
+                        ]
+                    }
+                }
             }
         },
         "PersonApi": {
@@ -1107,18 +1141,20 @@
             "Value": {
                 "Fn::Join": [
                     ":",
-                    [{
-                        "Fn::GetAtt": [
-                            "DBCluster",
-                            "Endpoint"
-                        ]
-                    },
-                    {
-                        "Fn::GetAtt": [
-                            "DBInstance",
-                            "Port"
-                        ]
-                    }]
+                    [
+                        {
+                            "Fn::GetAtt": [
+                                "DBCluster",
+                                "Endpoint"
+                            ]
+                        },
+                        {
+                            "Fn::GetAtt": [
+                                "DBInstance",
+                                "Port"
+                            ]
+                        }
+                    ]
                 ]
             }
         },
