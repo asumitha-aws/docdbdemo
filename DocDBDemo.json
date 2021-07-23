@@ -99,7 +99,7 @@
             "Type": "String",
             "Default": "t3.medium"
         },
-        "yourIPAddress": {
+        "YourIPAddress": {
             "Type": "String",
             "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x",
             "Description": "Replace X.X.X.X with your ip address",
@@ -510,7 +510,7 @@
                         "FromPort": "22",
                         "ToPort": "22",
                         "CidrIp": {
-                            "Ref": "yourIPAddress"
+                            "Ref": "YourIPAddress"
                         }
                     }
                 ]
