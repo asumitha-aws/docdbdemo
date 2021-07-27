@@ -140,6 +140,9 @@
             },
             "PrivateTwo": {
                 "CIDR": "10.0.3.0/24"
+            },
+            "PrivateThree": {
+                "CIDR": "10.0.4.0/24"
             }
         }
     },
@@ -333,6 +336,39 @@
                 ]
             }
         },
+        "PrivateSubnetThree": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": {
+                                "Ref": "AWS::Region"
+                            }
+                        }
+                    ]
+                },
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "PrivateThree",
+                        "CIDR"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "DocDBVPCPrivateThree-${AWS::StackName}"
+                        }
+                    }
+                ]
+            }
+        },
         "InternetGateway": {
             "Type": "AWS::EC2::InternetGateway"
         },
@@ -494,6 +530,37 @@
                 }
             }
         },
+        "PrivateRouteTableThree": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "PrivateRouteThree": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableThree"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGatewayTwo"
+                }
+            }
+        },
+        "PrivateRouteTableThreeAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableThree"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnetThree"
+                }
+            }
+        },
         "EC2SecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
@@ -561,7 +628,7 @@
                             "Version": "2012-10-17",
                             "Statement": [
                                 {
-                                    "Sid": "AWSLambdaVPCAccessExecutionRole",
+                                    "Sid": "LogGroupStatement",
                                     "Effect": "Allow",
                                     "Action": [
                                         "logs:CreateLogGroup",
@@ -574,6 +641,21 @@
                                         "kms:Encrypt"
                                     ],
                                     "Resource": "*"
+                                },
+                                {
+                                    "Sid": "SecretManagerAccessStatement",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "secretsmanager:GetSecretValue"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Ref": "DocDBSecret"
+                                        },
+                                        {
+                                            "Ref": "KMSKeySecret"
+                                        }
+                                    ]
                                 }
                             ]
                         }
@@ -629,36 +711,11 @@
                     ]
                 },
                 "Runtime": "python3.8",
+                "Timeout": 10,
                 "Environment": {
                     "Variables": {
-                        "docdbUser": {
-                            "Ref": "DocDBMasterUser"
-                        },
-                        "docdbPass": {
-                            "Ref": "DocDBMasterPassword"
-                        },
-                        "docdbEndpoint": {
-                            "Fn::Join": [
-                                ":",
-                                [
-                                    {
-                                        "Fn::GetAtt": [
-                                            "DBCluster",
-                                            "Endpoint"
-                                        ]
-                                    },
-                                    {
-                                        "Fn::GetAtt": [
-                                            "DBInstance",
-                                            "Port"
-                                        ]
-                                    }
-                                ]
-                            ]
-                        },
-                        "kms_key_alias": {
-                            "Ref": "KeyAliasName"
-                        }
+                        "docdbCredentials": "demo/DocumentDB/dbcredential",
+                        "kms_key_alias": "demo/DocumentDB/keyalias"
                     }
                 },
                 "VpcConfig": {
@@ -676,6 +733,9 @@
                         },
                         {
                             "Ref": "PrivateSubnetTwo"
+                        },
+                        {
+                            "Ref": "PrivateSubnetThree"
                         }
                     ]
                 }
@@ -709,36 +769,11 @@
                     ]
                 },
                 "Runtime": "python3.8",
+                "Timeout": 10,
                 "Environment": {
                     "Variables": {
-                        "docdbUser": {
-                            "Ref": "DocDBMasterUser"
-                        },
-                        "docdbPass": {
-                            "Ref": "DocDBMasterPassword"
-                        },
-                        "docdbEndpoint": {
-                            "Fn::Join": [
-                                ":",
-                                [
-                                    {
-                                        "Fn::GetAtt": [
-                                            "DBCluster",
-                                            "Endpoint"
-                                        ]
-                                    },
-                                    {
-                                        "Fn::GetAtt": [
-                                            "DBInstance",
-                                            "Port"
-                                        ]
-                                    }
-                                ]
-                            ]
-                        },
-                        "kms_key_alias": {
-                            "Ref": "KeyAliasName"
-                        }
+                        "docdbCredentials": "demo/DocumentDB/dbcredential",
+                        "kms_key_alias": "demo/DocumentDB/keyalias"
                     }
                 },
                 "VpcConfig": {
@@ -756,6 +791,9 @@
                         },
                         {
                             "Ref": "PrivateSubnetTwo"
+                        },
+                        {
+                            "Ref": "PrivateSubnetThree"
                         }
                     ]
                 }
@@ -811,6 +849,9 @@
                     },
                     {
                         "Ref": "PrivateSubnetTwo"
+                    },
+                    {
+                        "Ref": "PrivateSubnetThree"
                     }
                 ]
             }
@@ -855,6 +896,63 @@
                 }
             },
             "DependsOn": "DBCluster"
+        },
+        "DocDBSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": "demo/DocumentDB/dbcredential",
+                "Description": "This secret has the credentials for the DocumentDB cluster",
+                "SecretString": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "{\"username\":\"",
+                            {
+                                "Ref": "DocDBMasterUser"
+                            },
+                            "\",",
+                            "\"password\":\"",
+                            {
+                                "Ref": "DocDBMasterPassword"
+                            },
+                            "\"}"
+                        ]
+                    ]
+                }
+            },
+            "DependsOn": "DBInstance"
+        },
+        "KMSKeySecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": "demo/DocumentDB/keyalias",
+                "Description": "This secret has the kms key alias name",
+                "SecretString": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "{\"DocDBDemoKeyAlias\":\"",
+                            {
+                                "Ref": "KeyAliasName"
+                            },
+                            "\"}"
+                        ]
+                    ]
+                }
+            }
+        },
+        "SecretDocDBClusterAttachment": {
+            "Type": "AWS::SecretsManager::SecretTargetAttachment",
+            "Properties": {
+                "SecretId": {
+                    "Ref": "DocDBSecret"
+                },
+                "TargetId": {
+                    "Ref": "DBClusterName"
+                },
+                "TargetType": "AWS::DocDB::DBCluster"
+            },
+            "DependsOn": "DocDBSecret"
         },
         "EC2": {
             "Type": "AWS::EC2::Instance",
@@ -1122,6 +1220,11 @@
         "PrivateSubnet2": {
             "Value": {
                 "Ref": "PrivateSubnetTwo"
+            }
+        },
+        "PrivateSubnet3": {
+            "Value": {
+                "Ref": "PrivateSubnetThree"
             }
         },
         "ClusterId": {
