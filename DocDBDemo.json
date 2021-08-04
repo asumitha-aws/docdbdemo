@@ -4,12 +4,12 @@
     "Parameters": {
         "KeyAliasName": {
             "Default": "docdbdemokey",
-            "Description": "Key Alias name",
+            "Description": "KMS Key Alias Name",
             "Type": "String",
             "AllowedPattern": "[A-Za-z0-9_/-]*"
         },
         "DBClusterName": {
-            "Description": "Cluster name",
+            "Description": "Amazon DocumentDB Cluster Name",
             "Type": "String",
             "MinLength": "1",
             "MaxLength": "64",
@@ -17,7 +17,7 @@
             "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters."
         },
         "DBInstanceName": {
-            "Description": "Instance name",
+            "Description": "Amazon DocumentDB Instance Name",
             "Type": "String",
             "MinLength": "1",
             "MaxLength": "64",
@@ -26,7 +26,7 @@
         },
         "DocDBMasterUser": {
             "NoEcho": "false",
-            "Description": "The database admin account username",
+            "Description": "Amazon DocumentDB database account Username",
             "Type": "String",
             "MinLength": "1",
             "MaxLength": "16",
@@ -35,14 +35,14 @@
         },
         "DocDBMasterPassword": {
             "NoEcho": "true",
-            "Description": "Master Password must be at least eight characters long",
+            "Description": "Amazon DocumentDB Master Password must be at least eight characters long",
             "Type": "String",
             "MinLength": "8",
             "MaxLength": "41",
             "ConstraintDescription": "must contain only alphanumeric characters."
         },
         "DBInstanceClass": {
-            "Description": "Instance class. Please refer to: https://docs.aws.amazon.com/documentdb/latest/developerguide/db-instance-classes.html#db-instance-classes-by-region",
+            "Description": "Instance class. Leave default of pick one from https://docs.aws.amazon.com/documentdb/latest/developerguide/db-instance-classes.html#db-instance-classes-by-region",
             "Default": "db.t3.medium",
             "Type": "String",
             "AllowedValues": [
@@ -59,7 +59,7 @@
             "ConstraintDescription": "Instance type must be of the ones supported for the region. Please refer to: https://docs.aws.amazon.com/documentdb/latest/developerguide/db-instance-classes.html#db-instance-classes-by-region"
         },
         "LambdaCodeS3BucketNameLocation": {
-            "Description": "S3 bucket name where your lambda zip code is uploaded",
+            "Description": "S3 bucket name where your lambda zip files are uploaded",
             "Type": "String",
             "AllowedPattern": "[a-z0-9-_]+",
             "ConstraintDescription": "Lowercase letters and numbers only!",
@@ -67,21 +67,21 @@
         },
         "InsertLambdaZipFileName": {
             "Default": "DocDBDemoInsert.zip",
-            "Description": "Insert lambda zip file name",
+            "Description": "Insert lambda zip file name. Use default value if you have not modified the name",
             "Type": "String",
             "MinLength": "1",
             "MaxLength": "64"
         },
         "RetrieveLambdaZipFileName": {
             "Default": "DocDBDemoRetrive.zip",
-            "Description": "Retrieve lambda zip file name",
+            "Description": "Retrieve lambda zip file name. Use default value if you have not modified the name",
             "Type": "String",
             "MinLength": "1",
             "MaxLength": "64"
         },
         "LambdaLayerZipFileName": {
             "Default": "lambda-layer.zip",
-            "Description": "Lambda layer zip file name",
+            "Description": "Lambda layer zip file name. Use default value if you have not modified the name",
             "Type": "String",
             "MinLength": "1",
             "MaxLength": "64"
@@ -93,16 +93,18 @@
         },
         "ec2AMI": {
             "Type": "String",
-            "Default": "ami-0ab4d1e9cf9a1215a"
+            "Default": "ami-0ab4d1e9cf9a1215a",
+            "Description": "EC2 AMI to launch your EC2 instance"
         },
         "ec2InstanceType": {
             "Type": "String",
-            "Default": "t3.medium"
+            "Default": "t3.medium",
+            "Description": "EC2 Instance Type"
         },
         "YourIPAddress": {
             "Type": "String",
             "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x",
-            "Description": "Replace X.X.X.X with your ip address",
+            "Description": "Replace X.X.X.X with your ip address of the machine you use to SSH to EC2 instance",
             "Default": "X.X.X.X/32"
         }
     },
@@ -119,6 +121,36 @@
                         "DocDBMasterUser",
                         "DocDBMasterPassword",
                         "DBInstanceClass"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Enter Lambda Configuration fields"
+                    },
+                    "Parameters": [
+                        "LambdaCodeS3BucketNameLocation",
+                        "InsertLambdaZipFileName",
+                        "RetrieveLambdaZipFileName",
+                        "LambdaLayerZipFileName"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Enter EC2 fields"
+                    },
+                    "Parameters": [
+                        "ec2AMI",
+                        "ec2InstanceType",
+                        "ec2KeyPairName",
+                        "YourIPAddress"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Enter KMS key details"
+                    },
+                    "Parameters": [
+                        "KeyAliasName"
                     ]
                 }
             ]
