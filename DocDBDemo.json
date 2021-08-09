@@ -39,6 +39,7 @@
             "Type": "String",
             "MinLength": "8",
             "MaxLength": "41",
+            "AllowedPattern" : ".+",
             "ConstraintDescription": "must contain only alphanumeric characters."
         },
         "DBInstanceClass": {
@@ -70,21 +71,24 @@
             "Description": "Insert lambda zip file name. Use default value if you have not modified the name",
             "Type": "String",
             "MinLength": "1",
-            "MaxLength": "64"
+            "MaxLength": "64",
+            "AllowedPattern" : ".+"
         },
         "RetrieveLambdaZipFileName": {
             "Default": "DocDBDemoRetrive.zip",
             "Description": "Retrieve lambda zip file name. Use default value if you have not modified the name",
             "Type": "String",
             "MinLength": "1",
-            "MaxLength": "64"
+            "MaxLength": "64",
+            "AllowedPattern" : ".+"
         },
         "LambdaLayerZipFileName": {
             "Default": "lambda-layer.zip",
             "Description": "Lambda layer zip file name. Use default value if you have not modified the name",
             "Type": "String",
             "MinLength": "1",
-            "MaxLength": "64"
+            "MaxLength": "64",
+            "AllowedPattern" : ".+"
         },
         "ec2KeyPairName": {
             "Type": "String",
@@ -94,18 +98,21 @@
         "ec2AMI": {
             "Type": "String",
             "Default": "ami-0ab4d1e9cf9a1215a",
-            "Description": "EC2 AMI to launch your EC2 instance"
+            "Description": "EC2 AMI to launch your EC2 instance",
+            "AllowedPattern" : ".+"
         },
         "ec2InstanceType": {
             "Type": "String",
             "Default": "t3.medium",
-            "Description": "EC2 Instance Type"
+            "Description": "EC2 Instance Type",
+            "AllowedPattern" : ".+"
         },
         "YourIPAddress": {
             "Type": "String",
             "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x",
             "Description": "Replace X.X.X.X with your ip address of the machine you use to SSH to EC2 instance",
-            "Default": "X.X.X.X/32"
+            "Default": "X.X.X.X/32",
+            "AllowedPattern" : ".+"
         }
     },
     "Metadata": {
