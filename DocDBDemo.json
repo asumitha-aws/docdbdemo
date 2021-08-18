@@ -189,6 +189,7 @@
         "kmskey": {
             "Type": "AWS::KMS::Key",
             "Properties": {
+                "EnableKeyRotation" : true,
                 "KeyPolicy": {
                     "Statement": [
                         {
@@ -619,6 +620,14 @@
                             "Ref": "YourIPAddress"
                         }
                     }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "-1",
+                        "FromPort": "-1",
+                        "ToPort": "-1",
+                        "CidrIp": "0.0.0.0/0"
+                    }
                 ]
             }
         },
@@ -631,7 +640,15 @@
                 "GroupDescription": "Lambda Security Group",
                 "VpcId": {
                     "Ref": "VPC"
-                }
+                },
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "-1",
+                        "FromPort": "-1",
+                        "ToPort": "-1",
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ]
             }
         },
         "LambdaExecutionRole": {
@@ -676,8 +693,9 @@
                                         "ec2:CreateNetworkInterface",
                                         "ec2:DescribeNetworkInterfaces",
                                         "ec2:DeleteNetworkInterface",
-                                        "kms:Decrypt",
-                                        "kms:Encrypt"
+                                        "kms:GenerateDataKey*",
+                                        "kms:Encrypt",
+                                        "kms:Decrypt"
                                     ],
                                     "Resource": "*"
                                 },
@@ -749,8 +767,8 @@
                         "Arn"
                     ]
                 },
-                "Runtime": "python3.8",
-                "Timeout": 10,
+                "Runtime": "python3.7",
+                "Timeout": 30,
                 "Environment": {
                     "Variables": {
                         "docdbCredentials": "demo/DocumentDB/dbcredential",
@@ -807,8 +825,8 @@
                         "Arn"
                     ]
                 },
-                "Runtime": "python3.8",
-                "Timeout": 10,
+                "Runtime": "python3.7",
+                "Timeout": 30,
                 "Environment": {
                     "Variables": {
                         "docdbCredentials": "demo/DocumentDB/dbcredential",
@@ -832,7 +850,7 @@
                             "Ref": "PrivateSubnetTwo"
                         },
                         {
-                            "Ref": "PrivateSubnetThree"
+                            "Ref": "PrivateSubnetThree" 
                         }
                     ]
                 }
@@ -855,25 +873,13 @@
                         "ToPort": "27017",
                         "CidrIp": "10.0.0.0/16"
                     }
-                ]
-            }
-        },
-        "VPCEndpointSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-                "GroupName": {
-                    "Fn::Sub": "SecurityGroup1-${AWS::StackName}"
-                },
-                "GroupDescription": "Allow HTTPS access from VPC to VPC Endpoint",
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "SecurityGroupIngress": [
+                ],
+                "SecurityGroupEgress": [
                     {
-                        "IpProtocol": "tcp",
-                        "FromPort": "443",
-                        "ToPort": "443",
-                        "CidrIp": "10.0.0.0/16"
+                        "IpProtocol": "-1",
+                        "FromPort": "-1",
+                        "ToPort": "-1",
+                        "CidrIp": "0.0.0.0/0"
                     }
                 ]
             }
@@ -965,14 +971,17 @@
             "Type": "AWS::SecretsManager::Secret",
             "Properties": {
                 "Name": "demo/DocumentDB/keyalias",
-                "Description": "This secret has the kms key alias name",
+                "Description": "This secret has the kms key arn",
                 "SecretString": {
                     "Fn::Join": [
                         "",
                         [
-                            "{\"DocDBDemoKeyAlias\":\"",
+                            "{\"DocDBDemoKeyArn\":\"",
                             {
-                                "Ref": "KeyAliasName"
+                                "Fn::GetAtt": [
+                                    "kmskey",
+                                    "Arn"
+                                ]
                             },
                             "\"}"
                         ]
