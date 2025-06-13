@@ -695,7 +695,8 @@
                                         "ec2:DeleteNetworkInterface",
                                         "kms:GenerateDataKey*",
                                         "kms:Encrypt",
-                                        "kms:Decrypt"
+                                        "kms:Decrypt",
+                                        "cloudwatch:PutMetricData"
                                     ],
                                     "Resource": "*"
                                 },
